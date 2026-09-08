@@ -1,0 +1,61 @@
+name: Build and Deploy to Minikube
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        shell: bash
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/devops-k8s-demo:${GITHUB_SHA::7}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Create namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Create or update Kubernetes database secret
+        shell: bash
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          kubectl -n devops-demo create secret generic postgres-secret \
+            --from-literal=POSTGRES_USER=appuser \
+            --from-literal=POSTGRES_PASSWORD="$DB_PASSWORD" \
+            --from-literal=POSTGRES_DB=appdb \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy PostgreSQL
+        run: |
+          kubectl apply -f k8s/postgres-pvc.yaml
+          kubectl apply -f k8s/postgres-deployment.yaml
+          kubectl apply -f k8s/postgres-service.yaml
+          kubectl rollout status deployment/postgres -n devops-demo --timeout=120s
+
+      - name: Deploy backend
+        shell: bash
+        run: |
+          sed "s|IMAGE_PLACEHOLDER|$IMAGE|g" k8s/backend-deployment.yaml | kubectl apply -f -
+          kubectl apply -f k8s/backend-service.yaml
+          kubectl rollout status deployment/backend -n devops-demo --timeout=120s
+
+      - name: Show deployed resources
+        run: |
+          kubectl get pods,svc,pvc -n devops-demo
+          kubectl get deployment backend -n devops-demo -o wide
