@@ -22,6 +22,7 @@ jobs:
       - name: Build and push Docker image
         shell: bash
         run: |
+          USERNAME="$(printf '%s' "$DOCKERHUB_USERNAME" | tr -d '\r\n' | xargs)"
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/devops-k8s-demo:${GITHUB_SHA::7}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
           docker build -t "$IMAGE" .
