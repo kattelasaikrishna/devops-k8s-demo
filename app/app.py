@@ -49,7 +49,7 @@ def initialize_database():
 def home():
     return jsonify(
         application='devops-kubernetes-demo',
-        message='Application is running successfully',
+        message='Application deployed automatically through GitHub Actions',
         endpoints=['/visits', '/health/live', '/health/ready']
     )
 
