@@ -6,6 +6,7 @@ COPY app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/app.py .
+COPY app/init_db.py .
 
 RUN useradd --create-home --uid 10001 appuser
 USER appuser
